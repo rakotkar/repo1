@@ -1,5 +1,5 @@
 ```
-task mergeJacocoReports(type: JacocoReport) {
+task mergeJacocoReports(type: JacocoMerge) {
     dependsOn(subprojects.test)
 
     def jacocoFiles = subprojects.collect {
@@ -8,14 +8,22 @@ task mergeJacocoReports(type: JacocoReport) {
 
     executionData jacocoFiles
 
-    sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
-    classDirectories = files(subprojects.sourceSets.main.output)
-
-    reports {
-        xml.enabled false // Disable XML report for merged report
-        html.enabled true
-        html.destination file("${buildDir}/jacocoHtml")
+    subprojects.each { subproject ->
+        sourceSets {
+            subproject.name {
+                java {
+                    srcDirs = subproject.sourceSets.main.allSource.srcDirs
+                }
+            }
+        }
     }
+
+    subprojects.each { subproject ->
+        classDirectories += subproject.sourceSets.main.output
+    }
+
+    destinationFile = file("$buildDir/reports/jacoco/merged.exec")
 }
+
 
 ```
