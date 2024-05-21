@@ -1,5 +1,5 @@
 ```
-task mergeJacocoReports(type: JacocoMerge) {
+task mergeJacocoReports(type: JacocoMergeReport) {
     dependsOn(subprojects.test)
 
     def jacocoFiles = subprojects.collect {
