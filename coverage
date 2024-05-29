@@ -1,0 +1,82 @@
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = "0.8.7"
+}
+
+// Define a custom task for generating an aggregated HTML report with coverage summaries
+task generateCoverageHTMLReport(type: JacocoReport) {
+    dependsOn = subprojects.test
+
+    // Configure where to generate the HTML report
+    reports {
+        html.destination file("$buildDir/reports/jacoco/html")
+    }
+
+    // Define a map to store module-wise coverage results
+    def moduleCoverageMap = [:]
+
+    doLast {
+        // Iterate over each submodule and include its coverage report
+        subprojects.each { subproject ->
+            // Calculate and store coverage details for each submodule
+            def jacocoReportFile = subproject.file("${subproject.buildDir}/reports/jacoco/testCodeCoverageReport/jacocoTestReport.xml")
+            if (jacocoReportFile.exists()) {
+                def coverageXML = new XmlSlurper().parse(jacocoReportFile)
+                def coverageDetails = calculateCoverageDetails(coverageXML)
+                moduleCoverageMap[subproject.name] = coverageDetails
+            }
+        }
+
+        // Generate HTML report with coverage summaries
+        def htmlReportFile = new File("$buildDir/reports/jacoco/html/index.html")
+        htmlReportFile.text = """
+            <html>
+            <head>
+                <title>Project-wise Coverage Summaries</title>
+                <style>
+                    table {
+                        border-collapse: collapse;
+                        width: 100%;
+                    }
+                    th, td {
+                        border: 1px solid black;
+                        padding: 8px;
+                        text-align: left;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Project-wise Coverage Summaries</h1>
+                <table>
+                    <tr>
+                        <th>Module</th>
+                        <th>Instruction Coverage (%)</th>
+                        <th>Line Coverage (%)</th>
+                        <th>Method Coverage (%)</th>
+                    </tr>
+                    ${moduleCoverageMap.collect { moduleName, coverageDetails ->
+                        "<tr><td>$moduleName</td><td>${coverageDetails.instructionCoverage.round(2)}</td><td>${coverageDetails.lineCoverage.round(2)}</td><td>${coverageDetails.methodCoverage.round(2)}</td></tr>"
+                    }.join('\n')}
+                </table>
+            </body>
+            </html>
+        """
+    }
+}
+
+// Function to calculate coverage details from the Jacoco XML report
+def calculateCoverageDetails(coverageXML) {
+    def instructionCoverage = calculateCoveragePercentage(coverageXML, 'INSTRUCTION')
+    def lineCoverage = calculateCoveragePercentage(coverageXML, 'LINE')
+    def methodCoverage = calculateCoveragePercentage(coverageXML, 'METHOD')
+    return [instructionCoverage: instructionCoverage, lineCoverage: lineCoverage, methodCoverage: methodCoverage]
+}
+
+// Function to calculate coverage percentage from the Jacoco XML report
+def calculateCoveragePercentage(coverageXML, type) {
+    def covered = coverageXML.counter.find { it.@type == type }.@covered.toInteger()
+    def missed = coverageXML.counter.find { it.@type == type }.@missed.toInteger()
+    def total = covered + missed
+    return (covered / total.toFloat()) * 100
+}
