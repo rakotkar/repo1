@@ -1,8 +1,73 @@
-something
+// Db2ProcCaller.java
+import org.springframework.jdbc.core.*;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.simple.SimpleJdbcCall;
 
-some more
+import javax.sql.DataSource;
+import java.util.*;
 
-extra
+public class Db2ProcCaller {
+  private final JdbcTemplate jdbc;
 
+  public Db2ProcCaller(DataSource ds) {
+    this.jdbc = new JdbcTemplate(ds);
+    // nicer access: result maps like get("o_total") or get("O_TOTAL")
+    this.jdbc.setResultsMapCaseInsensitive(true);
+  }
 
-abc
+  /** Single cursor + auto-captured OUT params */
+  public <T> Map<String,Object> call(
+      String schema,
+      String procedure,
+      Map<String,?> inParams,
+      String cursorName,
+      RowMapper<T> mapper) {
+
+    var call = new SimpleJdbcCall(jdbc)
+        .withSchemaName(schema)
+        .withProcedureName(procedure)
+        // uses metadata to discover IN/OUT params automatically
+        .returningResultSet(cursorName, mapper);
+
+    var in = new MapSqlParameterSource();
+    if (inParams != null) inParams.forEach(in::addValue);
+
+    // raw contains cursor lists + OUT params (plus #metadata keys)
+    Map<String,Object> raw = call.execute(in);
+
+    // keep everything except framework internals
+    Map<String,Object> result = new LinkedHashMap<>();
+    raw.forEach((k,v) -> { if (!k.startsWith("#")) result.put(k, v); });
+    return result;
+  }
+
+  /** Multiple cursors + auto-captured OUT params */
+  public Map<String,Object> callMulti(
+      String schema,
+      String procedure,
+      Map<String,?> inParams,
+      Map<String, ? extends RowMapper<?>> cursorsByName) {
+
+    var call = new SimpleJdbcCall(jdbc)
+        .withSchemaName(schema)
+        .withProcedureName(procedure);
+
+    for (var e : cursorsByName.entrySet()) {
+      call = call.returningResultSet(e.getKey(), e.getValue());
+    }
+
+    var in = new MapSqlParameterSource();
+    if (inParams != null) inParams.forEach(in::addValue);
+
+    Map<String,Object> raw = call.execute(in);
+
+    Map<String,Object> result = new LinkedHashMap<>();
+    raw.forEach((k,v) -> { if (!k.startsWith("#")) result.put(k, v); });
+    return result;
+  }
+
+  /** Convenience mapper for entities/POJOs (column -> property) */
+  public static <T> RowMapper<T> beanMapper(Class<T> type) {
+    return new BeanPropertyRowMapper<>(type);
+  }
+}
