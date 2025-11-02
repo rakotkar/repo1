@@ -1,0 +1,42 @@
+Feature: Retrieve Transactions by Account ID
+  The Transaction API should return all transactions for a given account
+  when provided with valid parameters such as ProviderId, TransactionPeriod, and ApiVersion.
+
+  Background:
+    Given the base API endpoint "/v1/transactions"
+
+  Scenario: Successful retrieval of transactions for a valid account
+    Given the following request parameters:
+      | AccountId        | ACC123          |
+      | ProviderId       | PROV01          |
+      | TransactionPeriod| 2025-10         |
+      | Month            | October         |
+      | AccessToken      | Bearer valid-token |
+      | ApiVersion       | v1.0            |
+    When a GET request is sent to "/v1/transactions/ACC123"
+    Then the response status code should be 200
+    And the response body should contain valid transaction details:
+      | AccountId  | ACC123 |
+      | ProviderId | PROV01 |
+
+  Scenario: Retrieval without the month parameter
+    Given the following request parameters:
+      | AccountId        | ACC123          |
+      | ProviderId       | PROV01          |
+      | TransactionPeriod| 2025-09         |
+      | AccessToken      | Bearer valid-token |
+      | ApiVersion       | v1.0            |
+    When a GET request is sent to "/v1/transactions/ACC123"
+    Then the response status code should be 200
+    And the response body should include transactions for the specified TransactionPeriod
+
+  Scenario: Invalid account should return a not found error
+    Given the following request parameters:
+      | AccountId        | INVALID_ACC     |
+      | ProviderId       | PROV01          |
+      | TransactionPeriod| 2025-09         |
+      | AccessToken      | Bearer valid-token |
+      | ApiVersion       | v1.0            |
+    When a GET request is sent to "/v1/transactions/INVALID_ACC"
+    Then the response status code should be 404
+    And the response body should contain the message "Account not found"
